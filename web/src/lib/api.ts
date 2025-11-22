@@ -1,4 +1,5 @@
 import axios from 'axios';
+import { useAuthStore } from './store';
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
 
@@ -10,7 +11,7 @@ export const api = axios.create({
 });
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = useAuthStore.getState().token;
   if (token) {
     config.headers.Authorization = `Bearer ${token}`;
   }
@@ -21,7 +22,7 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('token');
+      useAuthStore.getState().logout();
       window.location.href = '/auth/login';
     }
     return Promise.reject(error);
@@ -49,6 +50,9 @@ export const folderAPI = {
 export const fileAPI = {
   initUpload: (data: any) => api.post('/files/upload/init', data),
   completeUpload: (id: string) => api.post(`/files/upload/${id}/complete`),
+  uploadDirect: (formData: FormData) => api.post('/files/upload/direct', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  }),
   getAll: (folderId?: string) => api.get('/files', { params: { folder_id: folderId } }),
   getDownloadUrl: (id: string) => api.get(`/files/${id}/download`),
   delete: (id: string) => api.delete(`/files/${id}`),

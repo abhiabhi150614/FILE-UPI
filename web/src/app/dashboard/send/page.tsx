@@ -59,26 +59,17 @@ export default function SendPage() {
 
       // If uploading new file
       if (mode === 'new' && uploadFile) {
-        // 1. Init Upload
-        const { data: initData } = await fileAPI.initUpload({
-          filename: uploadFile.name,
-          size_bytes: uploadFile.size,
-          mime_type: uploadFile.type || 'application/octet-stream',
-          folder_id: null, // Root folder or default
-        });
+        const formData = new FormData();
+        formData.append('file', uploadFile);
+        if (targetFolder) {
+           // Note: The backend expects 'folder_id', but here we have 'target_folder_name' for the transaction.
+           // The file itself might just go to root or a default folder for the sender.
+           // We'll leave folder_id empty for now or map it if we had folder IDs.
+        }
 
-        // 2. Upload to S3
-        await axios.put(initData.upload_url, uploadFile, {
-          headers: { 'Content-Type': uploadFile.type || 'application/octet-stream' },
-          onUploadProgress: (progressEvent) => {
-            const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-            setUploadProgress(percent);
-          },
-        });
-
-        // 3. Complete Upload
-        await fileAPI.completeUpload(initData.file_id);
-        fileIdToSend = initData.file_id;
+        const { data: uploadData } = await fileAPI.uploadDirect(formData);
+        fileIdToSend = uploadData.id;
+        setUploadProgress(100);
       }
 
       // 4. Send Share

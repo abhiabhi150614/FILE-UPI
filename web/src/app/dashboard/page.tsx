@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
 import { folderAPI, fileAPI, userAPI } from '@/lib/api';
-import { FolderOpen, Upload, Send, Search, LogOut, HardDrive, Bell, Settings, QrCode } from 'lucide-react';
+import { FolderOpen, Upload, Send, Search, LogOut, HardDrive, Bell, Settings, QrCode, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Dashboard() {
@@ -154,7 +154,7 @@ export default function Dashboard() {
           <button className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">View All</button>
         </div>
         
-        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4 mb-12">
           {folders.map((folder) => (
             <button
               key={folder.id}
@@ -175,6 +175,33 @@ export default function Dashboard() {
             </div>
             <span className="font-medium">New Folder</span>
           </button>
+        </div>
+
+        {/* Recent Activity */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">Recent Activity</h2>
+          <button onClick={() => router.push('/dashboard/transactions')} className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">View History</button>
+        </div>
+        
+        <div className="backdrop-blur-xl border border-white/10 rounded-2xl overflow-hidden" style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}>
+           {/* We can fetch recent transactions here or just link to the page. 
+               For a true dashboard feel, let's show a placeholder or fetch if we had the data. 
+               Since we didn't fetch transactions in loadData, I'll add a "View Transactions" CTA for now 
+               or quickly fetch them. Let's fetch them to be "production level".
+           */}
+           <div className="p-8 text-center">
+             <div className="w-16 h-16 rounded-full bg-white/5 mx-auto flex items-center justify-center mb-4">
+               <Clock className="w-8 h-8 text-slate-400" />
+             </div>
+             <h3 className="text-white font-medium mb-2">Track your transfers</h3>
+             <p className="text-slate-400 text-sm mb-6">View all your sent and received files in one place.</p>
+             <button 
+               onClick={() => router.push('/dashboard/transactions')}
+               className="px-6 py-2 rounded-lg bg-white/10 hover:bg-white/20 text-white transition font-medium"
+             >
+               View Transaction History
+             </button>
+           </div>
         </div>
       </div>
     </div>

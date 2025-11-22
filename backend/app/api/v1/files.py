@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
+from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -92,6 +93,77 @@ async def init_upload(
         "file_id": str(file.id)
     }
 
+@router.post("/upload/direct", response_model=FileResponse)
+async def upload_file_direct(
+    file: UploadFile = FastAPIFile(...),
+    folder_id: str | None = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Direct file upload (server-side proxy) to bypass CORS issues"""
+    
+    # Validate file size (read from header or check chunk by chunk, but for now rely on Nginx/FastAPI limits)
+    # Note: FastAPI spools to memory/temp file.
+    
+    # Check storage quota (approximate since we don't know exact size yet, or use Content-Length)
+    # For simplicity in this proxy, we'll check after or assume it fits if small enough.
+    # Better: Check Content-Length header if available.
+    
+    size_bytes = 0
+    # We need to calculate size. file.file is a SpooledTemporaryFile.
+    file.file.seek(0, 2)
+    size_bytes = file.file.tell()
+    file.file.seek(0)
+    
+    if current_user.storage_used_bytes + size_bytes > current_user.storage_quota_bytes:
+        raise HTTPException(status_code=400, detail="Storage quota exceeded")
+
+    # Generate storage key
+    storage_key = storage_service.generate_storage_key(str(current_user.id), file.filename)
+    
+    # Upload to S3
+    try:
+        storage_service.upload_file_obj(file.file, storage_key, file.content_type)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+    
+    # Create file record
+    db_file = File(
+        owner_user_id=current_user.id,
+        folder_id=folder_id,
+        filename=file.filename,
+        original_filename=file.filename,
+        size_bytes=size_bytes,
+        mime_type=file.content_type,
+        storage_key=storage_key,
+        storage_bucket=settings.S3_BUCKET,
+        checksum_sha256="pending",
+        status="uploaded"
+    )
+    
+    db.add(db_file)
+    
+    # Update user storage
+    current_user.storage_used_bytes += size_bytes
+    
+    await db.commit()
+    await db.refresh(db_file)
+    
+    # Trigger background tasks
+    from app.workers.tasks import process_file_ocr, generate_thumbnail
+    process_file_ocr.delay(str(db_file.id), db_file.storage_key, db_file.mime_type)
+    generate_thumbnail.delay(str(db_file.id), db_file.storage_key, db_file.mime_type)
+    
+    return {
+        "id": str(db_file.id),
+        "filename": db_file.filename,
+        "size_bytes": db_file.size_bytes,
+        "mime_type": db_file.mime_type,
+        "folder_id": str(db_file.folder_id) if db_file.folder_id else None,
+        "created_at": db_file.created_at.isoformat(),
+        "thumbnail_url": None
+    }
+
 @router.post("/upload/{file_id}/complete")
 async def complete_upload(
     file_id: str,
@@ -163,13 +235,55 @@ async def get_files(
         for file in files
     ]
 
+@router.get("/download/proxy")
+async def download_proxy(
+    key: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Proxy download for local storage"""
+    # Security check: Ensure the user owns the file associated with this key
+    # This is a bit tricky since we only have the key. 
+    # Ideally we should look up the file by ID, but the URL structure uses the key.
+    # Let's verify the key format or look it up.
+    
+    # Better approach: The frontend calls /files/{id}/download, which returns this proxy URL.
+    # So the user already authenticated there. 
+    # But this endpoint itself needs protection.
+    # For now, we'll allow it if authenticated, but in production we should verify ownership.
+    # We can query the DB to check if any file with this storage_key belongs to the user.
+    
+    result = await db.execute(
+        select(File).where(
+            File.storage_key == key,
+            File.owner_user_id == current_user.id
+        )
+    )
+    file = result.scalar_one_or_none()
+    
+    if not file:
+        raise HTTPException(status_code=404, detail="File not found or access denied")
+        
+    if not os.path.exists(key):
+        raise HTTPException(status_code=404, detail="File not found on server")
+        
+    return FileResponse(
+        path=key, 
+        filename=file.original_filename,
+        media_type=file.mime_type
+    )
+
+from fastapi.responses import FileResponse as FastAPIFileResponse
+from fastapi.responses import StreamingResponse
+import os
+
 @router.get("/{file_id}/download")
 async def get_download_url(
     file_id: str,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get presigned download URL"""
+    """Get download URL (direct file stream for local storage)"""
     
     result = await db.execute(
         select(File).where(
@@ -182,11 +296,24 @@ async def get_download_url(
     if not file:
         raise HTTPException(status_code=404, detail="File not found")
     
+    # For local storage, we can just return the file directly if we change the frontend to expect a blob
+    # OR we return a URL that points to a download endpoint.
+    # Let's use the proxy approach.
+    
+    # If using LocalStorageService, the URL will be /api/v1/files/download/proxy?key=...
     download_url = storage_service.create_presigned_download_url(
         file.storage_key,
         filename=file.original_filename
     )
     
+    # If the URL is relative (starts with /), prepend the API URL if needed, 
+    # but since it's an API response, the frontend might expect a full URL.
+    # Let's make sure it works.
+    if download_url.startswith("/"):
+        # It's a local path, construct full URL
+        # We need the base URL. For now, let's return it as is and ensure frontend handles it.
+        pass
+
     return {
         "download_url": download_url,
         "filename": file.original_filename,

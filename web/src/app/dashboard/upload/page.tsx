@@ -77,22 +77,13 @@ export default function UploadPage() {
     setProgress(0);
 
     try {
-      const { data: initData } = await fileAPI.initUpload({
-        filename: file.name,
-        size_bytes: file.size,
-        mime_type: file.type || 'application/octet-stream',
-        folder_id: selectedFolder,
-      });
+      const formData = new FormData();
+      formData.append('file', file);
+      formData.append('folder_id', selectedFolder);
 
-      await axios.put(initData.upload_url, file, {
-        headers: { 'Content-Type': file.type || 'application/octet-stream' },
-        onUploadProgress: (progressEvent) => {
-          const percent = Math.round((progressEvent.loaded * 100) / (progressEvent.total || 1));
-          setProgress(percent);
-        },
-      });
-
-      await fileAPI.completeUpload(initData.file_id);
+      await fileAPI.uploadDirect(formData);
+      
+      setProgress(100);
       toast.success('File uploaded successfully!');
       router.push('/dashboard');
     } catch (error: any) {
