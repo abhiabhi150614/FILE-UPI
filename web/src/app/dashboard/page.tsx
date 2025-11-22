@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/store';
 import { folderAPI, fileAPI, userAPI } from '@/lib/api';
-import { FolderOpen, Upload, Send, Search, LogOut, HardDrive } from 'lucide-react';
+import { FolderOpen, Upload, Send, Search, LogOut, HardDrive, Bell, Settings, QrCode } from 'lucide-react';
 import toast from 'react-hot-toast';
 
 export default function Dashboard() {
@@ -13,6 +13,11 @@ export default function Dashboard() {
   const [folders, setFolders] = useState<any[]>([]);
   const [storage, setStorage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [mounted, setMounted] = useState(false);
+
+  useEffect(() => {
+    setMounted(true);
+  }, []);
 
   useEffect(() => {
     if (!user) {
@@ -32,7 +37,7 @@ export default function Dashboard() {
       setStorage(storageRes.data);
     } catch (error: any) {
       console.error('Load error:', error);
-      toast.error(error.response?.data?.detail || 'Failed to load data');
+      // toast.error(error.response?.data?.detail || 'Failed to load data');
     } finally {
       setLoading(false);
     }
@@ -43,81 +48,133 @@ export default function Dashboard() {
     router.push('/');
   };
 
+  if (!mounted) return <div style={{ backgroundColor: '#0f172a', height: '100vh' }} />;
+
   if (loading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="text-xl">Loading...</div>
+      <div className="min-h-screen flex items-center justify-center" style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}>
+        <div className="text-xl animate-pulse">Loading Dashboard...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <div className="min-h-screen relative overflow-hidden" style={{ backgroundColor: '#0f172a', color: '#f8fafc' }}>
+      {/* Background Effects */}
+      <div className="absolute top-0 left-0 w-full h-full overflow-hidden -z-10">
+        <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] rounded-full blur-[120px]" style={{ backgroundColor: 'rgba(79, 70, 229, 0.1)' }} />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] rounded-full blur-[120px]" style={{ backgroundColor: 'rgba(147, 51, 234, 0.1)' }} />
+      </div>
+
       {/* Navbar */}
-      <nav className="bg-white border-b sticky top-0 z-50">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
+      <nav className="sticky top-0 z-50 border-b border-white/5 backdrop-blur-md" style={{ backgroundColor: 'rgba(15, 23, 42, 0.8)' }}>
+        <div className="container mx-auto px-6 py-4 flex justify-between items-center">
           <div className="flex items-center gap-2">
-            <div className="w-10 h-10 bg-gradient-to-br from-blue-600 to-purple-600 rounded-xl flex items-center justify-center text-white font-bold">F</div>
-            <span className="text-xl font-bold text-gray-900">FileFlow</span>
+            <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-lg" style={{ background: 'linear-gradient(135deg, #6366f1, #9333ea)' }}>
+              <span className="text-white font-bold text-xl">F</span>
+            </div>
+            <span className="text-xl font-bold text-white tracking-tight">FileFlow</span>
           </div>
-          <div className="flex items-center gap-4">
-            <span className="text-sm text-gray-600">{user?.name}</span>
-            <button onClick={handleLogout} className="text-gray-600 hover:text-red-600 transition">
-              <LogOut size={20} />
+          <div className="flex items-center gap-6">
+            <button className="text-slate-400 hover:text-white transition relative">
+              <Bell className="w-6 h-6" />
+              <span className="absolute -top-1 -right-1 w-2 h-2 bg-red-500 rounded-full"></span>
             </button>
+            <div className="flex items-center gap-3 pl-6 border-l border-white/10">
+              <div className="text-right hidden md:block">
+                <div className="text-sm font-medium text-white">{user?.name}</div>
+                <div className="text-xs text-slate-400">{user?.email}</div>
+              </div>
+              <button onClick={handleLogout} className="text-slate-400 hover:text-red-400 transition" title="Logout">
+                <LogOut className="w-5 h-5" />
+              </button>
+            </div>
           </div>
         </div>
       </nav>
 
-      <div className="container mx-auto px-4 py-8">
+      <div className="container mx-auto px-6 py-8">
+        {/* Storage Card */}
         {storage && (
-          <div className="bg-white rounded-xl shadow-sm border p-6 mb-8">
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-2">
-                <HardDrive size={20} className="text-blue-600" />
-                <span className="font-semibold text-gray-900">Storage</span>
+          <div className="backdrop-blur-xl border border-white/10 rounded-2xl p-6 mb-8" style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}>
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-indigo-500/20 text-indigo-400">
+                  <HardDrive className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="font-semibold text-white">Storage Usage</h3>
+                  <p className="text-sm text-slate-400">Premium Plan</p>
+                </div>
               </div>
-              <span className="text-sm text-gray-600">
-                {storage.used_gb} GB / {storage.quota_gb} GB
+              <span className="text-sm font-medium text-white">
+                {storage.used_gb} GB <span className="text-slate-500">/ {storage.quota_gb} GB</span>
               </span>
             </div>
-            <div className="w-full bg-gray-200 rounded-full h-2">
-              <div className="bg-blue-600 h-2 rounded-full transition-all" style={{ width: `${storage.percentage}%` }} />
+            <div className="w-full bg-slate-700/50 rounded-full h-2 overflow-hidden">
+              <div 
+                className="h-full rounded-full transition-all duration-1000 ease-out" 
+                style={{ 
+                  width: `${Math.min(storage.percentage, 100)}%`,
+                  background: 'linear-gradient(90deg, #6366f1, #a855f7)'
+                }} 
+              />
             </div>
           </div>
         )}
 
-        <div className="grid md:grid-cols-4 gap-4 mb-8">
+        {/* Quick Actions */}
+        <h2 className="text-xl font-bold text-white mb-6">Quick Actions</h2>
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           {[
-            { icon: Upload, label: 'Upload', color: 'bg-blue-600', href: '/dashboard/upload' },
-            { icon: Send, label: 'Send File', color: 'bg-purple-600', href: '/dashboard/send' },
-            { icon: Search, label: 'Search', color: 'bg-green-600', href: '/dashboard/search' },
-            { icon: FolderOpen, label: 'Transactions', color: 'bg-orange-600', href: '/dashboard/transactions' },
+            { icon: Send, label: 'Send File', desc: 'Transfer to anyone', color: 'from-blue-500 to-indigo-600', href: '/dashboard/send' },
+            { icon: Upload, label: 'Upload', desc: 'Save to cloud', color: 'from-emerald-500 to-teal-600', href: '/dashboard/upload' },
+            { icon: QrCode, label: 'Scan QR', desc: 'Receive instantly', color: 'from-purple-500 to-pink-600', href: '/dashboard/scan' },
+            { icon: Search, label: 'Search', desc: 'Find anything', color: 'from-orange-500 to-red-600', href: '/dashboard/search' },
           ].map((action, i) => (
             <button
               key={i}
               onClick={() => router.push(action.href)}
-              className={`${action.color} text-white rounded-xl p-6 hover:opacity-90 transition flex flex-col items-center gap-3 shadow-sm`}
+              className="group relative overflow-hidden rounded-2xl p-6 text-left transition-all hover:scale-[1.02] hover:shadow-lg border border-white/5"
+              style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}
             >
-              <action.icon size={32} />
-              <span className="font-semibold">{action.label}</span>
+              <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity bg-gradient-to-br ${action.color}`} />
+              <div className={`w-12 h-12 rounded-xl flex items-center justify-center mb-4 bg-gradient-to-br ${action.color} shadow-lg`}>
+                <action.icon className="w-6 h-6 text-white" />
+              </div>
+              <h3 className="font-bold text-white mb-1">{action.label}</h3>
+              <p className="text-sm text-slate-400">{action.desc}</p>
             </button>
           ))}
         </div>
 
-        <h2 className="text-2xl font-bold text-gray-900 mb-6">Your Folders</h2>
+        {/* Folders */}
+        <div className="flex items-center justify-between mb-6">
+          <h2 className="text-xl font-bold text-white">Your Folders</h2>
+          <button className="text-sm text-indigo-400 hover:text-indigo-300 font-medium">View All</button>
+        </div>
+        
         <div className="grid md:grid-cols-3 lg:grid-cols-4 gap-4">
           {folders.map((folder) => (
             <button
               key={folder.id}
               onClick={() => router.push(`/dashboard/folders/${folder.id}`)}
-              className="bg-white rounded-xl p-6 shadow-sm border hover:shadow-md transition text-left"
+              className="group backdrop-blur-sm border border-white/5 rounded-xl p-5 hover:bg-white/5 transition text-left"
+              style={{ backgroundColor: 'rgba(30, 41, 59, 0.3)' }}
             >
-              <div className="text-4xl mb-3">{folder.icon}</div>
-              <h3 className="font-semibold text-gray-900 mb-1">{folder.name}</h3>
-              <p className="text-sm text-gray-600">{folder.file_count} files</p>
+              <div className="text-4xl mb-4 group-hover:scale-110 transition-transform duration-300">{folder.icon}</div>
+              <h3 className="font-semibold text-white mb-1">{folder.name}</h3>
+              <p className="text-sm text-slate-500">{folder.file_count} files</p>
             </button>
           ))}
+          
+          {/* Add Folder Button */}
+          <button className="border border-dashed border-white/20 rounded-xl p-5 flex flex-col items-center justify-center text-slate-400 hover:text-white hover:border-white/40 transition gap-2 min-h-[160px]">
+            <div className="w-10 h-10 rounded-full bg-white/5 flex items-center justify-center">
+              <span className="text-2xl">+</span>
+            </div>
+            <span className="font-medium">New Folder</span>
+          </button>
         </div>
       </div>
     </div>

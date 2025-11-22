@@ -89,4 +89,27 @@ class S3StorageService:
         except ClientError:
             return False
 
+    def download_file_obj(self, storage_key: str, file_obj):
+        """Download file to file-like object"""
+        try:
+            self.s3_client.download_fileobj(self.bucket, storage_key, file_obj)
+        except ClientError as e:
+            raise Exception(f"Failed to download file: {str(e)}")
+
+    def upload_file_obj(self, file_obj, storage_key: str, content_type: str = None):
+        """Upload file-like object to S3"""
+        extra_args = {}
+        if content_type:
+            extra_args['ContentType'] = content_type
+            
+        try:
+            self.s3_client.upload_fileobj(
+                file_obj, 
+                self.bucket, 
+                storage_key,
+                ExtraArgs=extra_args
+            )
+        except ClientError as e:
+            raise Exception(f"Failed to upload file: {str(e)}")
+
 storage_service = S3StorageService()

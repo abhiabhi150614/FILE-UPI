@@ -10,12 +10,10 @@ import sentry_sdk
 import logging
 from app.config import settings
 from app.api.v1 import auth, users, folders, files, shares, search
+from app.core.monitoring import setup_logging, PerformanceMiddleware
 
 # Setup logging
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
+setup_logging()
 logger = logging.getLogger(__name__)
 
 # Initialize Sentry for error tracking
@@ -89,6 +87,8 @@ app.add_middleware(
 # Security Middleware
 if settings.ENVIRONMENT == "production":
     app.add_middleware(TrustedHostMiddleware, allowed_hosts=["*.fileflow.com", "fileflow.com"])
+
+app.add_middleware(PerformanceMiddleware)
 
 # Health check endpoint
 @app.get("/health")

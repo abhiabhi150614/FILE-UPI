@@ -232,3 +232,55 @@ async def get_transaction_details(
         "delivered_at": share.delivered_at.isoformat() if share.delivered_at else None,
         "viewed_at": share.first_viewed_at.isoformat() if share.first_viewed_at else None
     }
+
+@router.get("/{transaction_id}/receipt")
+async def get_transaction_receipt(
+    transaction_id: str,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get official transaction receipt data"""
+    
+    result = await db.execute(
+        select(Share, File)
+        .join(File, Share.file_id == File.id)
+        .where(
+            Share.transaction_id == transaction_id,
+            or_(
+                Share.sender_user_id == current_user.id,
+                Share.recipient_user_id == current_user.id
+            )
+        )
+    )
+    
+    row = result.first()
+    if not row:
+        raise HTTPException(status_code=404, detail="Transaction not found")
+    
+    share, file = row
+    
+    # Generate a verification signature
+    signature_base = f"{share.transaction_id}:{share.created_at.isoformat()}:{share.sender_user_id}:{share.recipient_user_id}:{file.checksum_sha256}"
+    signature = hashlib.sha256(signature_base.encode()).hexdigest()
+    
+    return {
+        "receipt_id": f"RCPT-{share.transaction_id[-8:]}",
+        "transaction_id": share.transaction_id,
+        "timestamp": share.created_at.isoformat(),
+        "status": "SUCCESS" if share.status in ["sent", "delivered", "viewed"] else share.status,
+        "sender": {
+            "name": share.sender_name,
+            "id": str(share.sender_user_id)
+        },
+        "recipient": {
+            "name": share.recipient_name or share.recipient_email,
+            "id": str(share.recipient_user_id) if share.recipient_user_id else None
+        },
+        "item": {
+            "name": file.filename,
+            "size": file.size_bytes,
+            "checksum": file.checksum_sha256
+        },
+        "verification_signature": signature,
+        "legal_disclaimer": "This is a computer generated receipt and does not require a physical signature. Verified by FileFlow."
+    }

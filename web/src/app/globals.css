@@ -2,6 +2,31 @@
 @tailwind components;
 @tailwind utilities;
 
+:root {
+  /* Deep Space Theme */
+  --background: #0f172a;
+  --foreground: #f8fafc;
+  
+  /* Brand Colors */
+  --primary: #6366f1;
+  --secondary: #a855f7;
+  --accent: #ec4899;
+}
+
 body {
-  @apply bg-gray-50;
+  color: var(--foreground);
+  background: radial-gradient(circle at top left, #1e1b4b, #0f172a);
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+}
+
+/* Animations */
+@keyframes float {
+  0% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+  100% { transform: translateY(0px); }
+}
+
+.animate-float {
+  animation: float 6s ease-in-out infinite;
 }

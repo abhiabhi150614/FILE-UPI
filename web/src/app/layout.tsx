@@ -7,6 +7,7 @@ export const metadata: Metadata = {
   description: 'Send, receive, and organize files like bank transactions',
 };
 
+// RootLayout component
 export default function RootLayout({
   children,
 }: {

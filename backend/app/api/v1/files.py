@@ -119,8 +119,11 @@ async def complete_upload(
     
     await db.commit()
     
-    # Trigger background tasks (virus scan, OCR, etc.)
-    # TODO: Add Celery task here
+    # Trigger background tasks
+    from app.workers.tasks import process_file_ocr, generate_thumbnail
+    
+    process_file_ocr.delay(str(file.id), file.storage_key, file.mime_type)
+    generate_thumbnail.delay(str(file.id), file.storage_key, file.mime_type)
     
     return {"message": "Upload completed", "file_id": str(file.id)}
 
