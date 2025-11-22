@@ -53,7 +53,7 @@ class Share(Base, TimestampMixin):
     revoked_at = Column(DateTime)
     
     # Audit
-    metadata = Column(JSONB, default={})
+    share_metadata = Column(JSONB, default={})
     ip_address = Column(String(50))
     user_agent = Column(Text)
     

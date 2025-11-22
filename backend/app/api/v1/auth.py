@@ -27,10 +27,18 @@ class TokenResponse(BaseModel):
 async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     """Register new user and create default folders"""
     
+    # Validate password strength
+    if len(user_data.password) < 8:
+        raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
+    if len(user_data.password) > 72:
+        raise HTTPException(status_code=400, detail="Password must be less than 72 characters")
+    
     # Check if user exists
-    result = await db.execute(select(User).where(User.email == user_data.email))
+    result = await db.execute(select(User).where(
+        (User.email == user_data.email) | (User.phone == user_data.phone)
+    ))
     if result.scalar_one_or_none():
-        raise HTTPException(status_code=400, detail="Email already registered")
+        raise HTTPException(status_code=400, detail="Email or phone already registered")
     
     # Create user
     user = User(

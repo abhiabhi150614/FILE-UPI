@@ -41,14 +41,26 @@ async def init_upload(
 ):
     """Initialize file upload - returns presigned URL for direct S3 upload"""
     
+    # Validate file size
+    if upload_data.size_bytes <= 0:
+        raise HTTPException(status_code=400, detail="Invalid file size")
+    
     # Check storage quota
     if current_user.storage_used_bytes + upload_data.size_bytes > current_user.storage_quota_bytes:
-        raise HTTPException(status_code=400, detail="Storage quota exceeded")
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Storage quota exceeded. Used: {current_user.storage_used_bytes / (1024**3):.2f}GB / {current_user.storage_quota_bytes / (1024**3):.2f}GB"
+        )
     
     # Check file size limit
     max_size = settings.MAX_FILE_SIZE_MB * 1024 * 1024
     if upload_data.size_bytes > max_size:
         raise HTTPException(status_code=400, detail=f"File size exceeds {settings.MAX_FILE_SIZE_MB}MB limit")
+    
+    # Validate file type (basic security)
+    dangerous_extensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1']
+    if any(upload_data.filename.lower().endswith(ext) for ext in dangerous_extensions):
+        raise HTTPException(status_code=400, detail="File type not allowed for security reasons")
     
     # Generate storage key
     storage_key = storage_service.generate_storage_key(str(current_user.id), upload_data.filename)
@@ -115,16 +127,24 @@ async def complete_upload(
 @router.get("/", response_model=List[FileResponse])
 async def get_files(
     folder_id: str | None = None,
+    limit: int = 50,
+    offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get files for current user"""
+    """Get files for current user with pagination"""
+    # Validate pagination
+    if limit > 100:
+        limit = 100
+    if offset < 0:
+        offset = 0
+    
     query = select(File).where(File.owner_user_id == current_user.id, File.deleted_at.is_(None))
     
     if folder_id:
         query = query.where(File.folder_id == folder_id)
     
-    result = await db.execute(query.order_by(File.created_at.desc()))
+    result = await db.execute(query.order_by(File.created_at.desc()).limit(limit).offset(offset))
     files = result.scalars().all()
     
     return [

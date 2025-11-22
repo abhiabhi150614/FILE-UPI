@@ -41,17 +41,26 @@ async def send_file(
 ):
     """Send file to another user (like UPI transaction)"""
     
+    # Validate recipient info
+    if not share_data.recipient_email and not share_data.recipient_phone:
+        raise HTTPException(status_code=400, detail="Recipient email or phone required")
+    
     # Get file
     result = await db.execute(
         select(File).where(
             File.id == share_data.file_id,
-            File.owner_user_id == current_user.id
+            File.owner_user_id == current_user.id,
+            File.deleted_at.is_(None)
         )
     )
     file = result.scalar_one_or_none()
     
     if not file:
-        raise HTTPException(status_code=404, detail="File not found")
+        raise HTTPException(status_code=404, detail="File not found or deleted")
+    
+    # Check if file is ready
+    if file.status != "uploaded":
+        raise HTTPException(status_code=400, detail="File is not ready to be shared")
     
     # Find recipient
     recipient = None

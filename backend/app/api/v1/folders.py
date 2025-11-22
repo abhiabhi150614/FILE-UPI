@@ -5,6 +5,7 @@ from typing import List
 from app.db.session import get_db
 from app.models.user import User
 from app.models.folder import Folder
+from app.models.file import File
 from app.api.v1.auth import get_current_user
 from pydantic import BaseModel
 
@@ -32,24 +33,37 @@ async def get_folders(
     db: AsyncSession = Depends(get_db)
 ):
     """Get all folders for current user"""
+    from sqlalchemy import func
+    
     result = await db.execute(
-        select(Folder)
+        select(
+            Folder.id,
+            Folder.name,
+            Folder.description,
+            Folder.icon,
+            Folder.color,
+            Folder.position,
+            func.count(File.id).label('file_count')
+        )
+        .outerjoin(File, (File.folder_id == Folder.id) & (File.deleted_at.is_(None)))
         .where(Folder.owner_user_id == current_user.id)
+        .group_by(Folder.id, Folder.name, Folder.description, Folder.icon, Folder.color, Folder.position)
         .order_by(Folder.position)
     )
-    folders = result.scalars().all()
+    
+    folders = result.all()
     
     return [
         {
-            "id": str(folder.id),
-            "name": folder.name,
-            "description": folder.description,
-            "icon": folder.icon,
-            "color": folder.color,
-            "file_count": len(folder.files),
-            "position": folder.position
+            "id": str(row.id),
+            "name": row.name,
+            "description": row.description,
+            "icon": row.icon,
+            "color": row.color,
+            "file_count": row.file_count or 0,
+            "position": row.position
         }
-        for folder in folders
+        for row in folders
     ]
 
 @router.post("/", response_model=FolderResponse, status_code=201)

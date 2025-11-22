@@ -45,13 +45,13 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str
     
     # Email
-    SENDGRID_API_KEY: str
-    FROM_EMAIL: str
+    SENDGRID_API_KEY: str = ""
+    FROM_EMAIL: str = "noreply@fileflow.com"
     
     # SMS
-    TWILIO_ACCOUNT_SID: str
-    TWILIO_AUTH_TOKEN: str
-    TWILIO_PHONE_NUMBER: str
+    TWILIO_ACCOUNT_SID: str = ""
+    TWILIO_AUTH_TOKEN: str = ""
+    TWILIO_PHONE_NUMBER: str = ""
     
     # Security
     CORS_ORIGINS: List[str] = ["http://localhost:3000"]

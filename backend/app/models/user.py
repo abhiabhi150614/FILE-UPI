@@ -1,4 +1,4 @@
-from sqlalchemy import Column, String, Boolean, DateTime, Integer
+from sqlalchemy import Column, String, Boolean, DateTime, Integer, BigInteger
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import relationship
 import uuid
@@ -28,8 +28,8 @@ class User(Base, TimestampMixin):
     
     # Subscription
     plan = Column(String(50), default="free")
-    storage_used_bytes = Column(Integer, default=0)
-    storage_quota_bytes = Column(Integer, default=5368709120)  # 5GB
+    storage_used_bytes = Column(BigInteger, default=0)
+    storage_quota_bytes = Column(BigInteger, default=5368709120)  # 5GB
     
     # Timestamps
     last_login = Column(DateTime)
