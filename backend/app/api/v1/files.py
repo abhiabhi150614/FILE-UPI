@@ -1,5 +1,5 @@
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse as FastAPIFileResponse
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File as FastAPIFile, Form
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List
@@ -33,6 +33,7 @@ class FileResponse(BaseModel):
     folder_id: str | None
     created_at: str
     thumbnail_url: str | None
+    view_url: str | None
 
 @router.post("/upload/init", response_model=FileUploadResponse)
 async def init_upload(
@@ -59,9 +60,10 @@ async def init_upload(
         raise HTTPException(status_code=400, detail=f"File size exceeds {settings.MAX_FILE_SIZE_MB}MB limit")
     
     # Validate file type (basic security)
-    dangerous_extensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1']
-    if any(upload_data.filename.lower().endswith(ext) for ext in dangerous_extensions):
-        raise HTTPException(status_code=400, detail="File type not allowed for security reasons")
+    # Validate file type (basic security)
+    # dangerous_extensions = ['.exe', '.bat', '.cmd', '.sh', '.ps1']
+    # if any(upload_data.filename.lower().endswith(ext) for ext in dangerous_extensions):
+    #     raise HTTPException(status_code=400, detail="File type not allowed for security reasons")
     
     # Generate storage key
     storage_key = storage_service.generate_storage_key(str(current_user.id), upload_data.filename)
@@ -75,7 +77,7 @@ async def init_upload(
         size_bytes=upload_data.size_bytes,
         mime_type=upload_data.mime_type,
         storage_key=storage_key,
-        storage_bucket=settings.S3_BUCKET,
+        storage_bucket=settings.B2_BUCKET_NAME,
         checksum_sha256="pending",
         status="uploading"
     )
@@ -96,7 +98,8 @@ async def init_upload(
 @router.post("/upload/direct", response_model=FileResponse)
 async def upload_file_direct(
     file: UploadFile = FastAPIFile(...),
-    folder_id: str | None = None,
+    folder_id: str | None = Form(None),
+    is_hidden: bool = Form(False),
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -136,9 +139,9 @@ async def upload_file_direct(
         size_bytes=size_bytes,
         mime_type=file.content_type,
         storage_key=storage_key,
-        storage_bucket=settings.S3_BUCKET,
+        storage_bucket=settings.B2_BUCKET_NAME,
         checksum_sha256="pending",
-        status="uploaded"
+        status="hidden" if is_hidden else "uploaded"
     )
     
     db.add(db_file)
@@ -154,6 +157,14 @@ async def upload_file_direct(
     process_file_ocr.delay(str(db_file.id), db_file.storage_key, db_file.mime_type)
     generate_thumbnail.delay(str(db_file.id), db_file.storage_key, db_file.mime_type)
     
+    # Generate view URL
+    # For B2/S3, we can generate a direct presigned URL for viewing
+    if hasattr(storage_service, 'create_presigned_view_url'):
+        view_url = storage_service.create_presigned_view_url(db_file.storage_key, db_file.mime_type)
+    else:
+        # Fallback for local storage or if method missing
+        view_url = f"{settings.API_V1_PREFIX}/files/download/proxy?key={db_file.storage_key}&disposition=inline"
+    
     return {
         "id": str(db_file.id),
         "filename": db_file.filename,
@@ -161,7 +172,8 @@ async def upload_file_direct(
         "mime_type": db_file.mime_type,
         "folder_id": str(db_file.folder_id) if db_file.folder_id else None,
         "created_at": db_file.created_at.isoformat(),
-        "thumbnail_url": None
+        "thumbnail_url": None,
+        "view_url": view_url
     }
 
 @router.post("/upload/{file_id}/complete")
@@ -214,7 +226,11 @@ async def get_files(
     if offset < 0:
         offset = 0
     
-    query = select(File).where(File.owner_user_id == current_user.id, File.deleted_at.is_(None))
+    query = select(File).where(
+        File.owner_user_id == current_user.id, 
+        File.deleted_at.is_(None),
+        File.status != "hidden"
+    )
     
     if folder_id:
         query = query.where(File.folder_id == folder_id)
@@ -230,7 +246,9 @@ async def get_files(
             "mime_type": file.mime_type,
             "folder_id": str(file.folder_id) if file.folder_id else None,
             "created_at": file.created_at.isoformat(),
-            "thumbnail_url": file.thumbnail_url
+            "thumbnail_url": file.thumbnail_url,
+            "thumbnail_url": file.thumbnail_url,
+            "view_url": storage_service.create_presigned_view_url(file.storage_key, file.mime_type) if hasattr(storage_service, 'create_presigned_view_url') else f"{settings.API_V1_PREFIX}/files/download/proxy?key={file.storage_key}&disposition=inline"
         }
         for file in files
     ]
@@ -238,6 +256,7 @@ async def get_files(
 @router.get("/download/proxy")
 async def download_proxy(
     key: str,
+    disposition: str = "attachment",
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
@@ -267,14 +286,13 @@ async def download_proxy(
     if not os.path.exists(key):
         raise HTTPException(status_code=404, detail="File not found on server")
         
-    return FileResponse(
+    return FastAPIFileResponse(
         path=key, 
-        filename=file.original_filename,
-        media_type=file.mime_type
+        filename=file.original_filename if disposition == "attachment" else None,
+        media_type=file.mime_type,
+        content_disposition_type=disposition
     )
 
-from fastapi.responses import FileResponse as FastAPIFileResponse
-from fastapi.responses import StreamingResponse
 import os
 
 @router.get("/{file_id}/download")

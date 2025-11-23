@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter, useParams } from 'next/navigation';
-import { ArrowLeft, FileText, Download, Trash2, MoreVertical, Search, FolderOpen } from 'lucide-react';
+import { ArrowLeft, FileText, Download, Trash2, MoreVertical, Search, FolderOpen, Eye } from 'lucide-react';
 import { folderAPI, fileAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
 
@@ -156,6 +156,17 @@ export default function FolderPage() {
                 </div>
 
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                  {file.view_url && (
+                    <a 
+                      href={file.view_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-blue-400 transition"
+                      title="View"
+                    >
+                      <Eye className="w-4 h-4" />
+                    </a>
+                  )}
                   <button 
                     onClick={() => handleDownload(file.id, file.filename)}
                     className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"

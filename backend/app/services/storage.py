@@ -112,25 +112,33 @@ from app.config import settings
 #         except ClientError as e:
 #             raise Exception(f"Failed to upload file: {str(e)}")
 
-import os
-import shutil
-from pathlib import Path
+import boto3
+from botocore.config import Config
+from botocore.exceptions import ClientError
 
-class LocalStorageService:
+class B2StorageService:
     def __init__(self):
-        self.upload_dir = Path("uploads")
-        self.upload_dir.mkdir(exist_ok=True)
-        # Create subdirectories for organization if needed, but flat or user-based is fine.
-        # We'll stick to the key structure.
+        self.key_id = settings.B2_KEY_ID
+        self.app_key = settings.B2_APP_KEY
+        self.bucket = settings.B2_BUCKET_NAME
+        self.endpoint_url = settings.B2_ENDPOINT_URL
+        
+        if not self.key_id or not self.app_key:
+            print("WARNING: B2 Credentials not set. Storage service may fail.")
+
+        self.s3_client = boto3.client(
+            's3',
+            endpoint_url=self.endpoint_url,
+            aws_access_key_id=self.key_id,
+            aws_secret_access_key=self.app_key,
+            config=Config(signature_version='s3v4')
+        )
     
     def generate_storage_key(self, user_id: str, filename: str) -> str:
-        """Generate unique key for file storage"""
+        """Generate unique S3/B2 key for file storage"""
         timestamp = datetime.utcnow().isoformat()
         unique_id = hashlib.sha256(f"{user_id}{filename}{timestamp}".encode()).hexdigest()[:16]
-        # Ensure the directory exists
-        user_dir = self.upload_dir / "users" / user_id / "files" / unique_id
-        user_dir.mkdir(parents=True, exist_ok=True)
-        return str(user_dir / filename)
+        return f"users/{user_id}/files/{unique_id}/{filename}"
     
     def create_presigned_upload_url(
         self,
@@ -138,15 +146,23 @@ class LocalStorageService:
         content_type: str,
         expires_in: int = None
     ) -> str:
-        """
-        For local storage, we don't have presigned URLs. 
-        But since we switched to /upload/direct, this might not be called for the main flow.
-        However, if the frontend still calls initUpload, we need to return something.
-        We can return a URL that points to our own backend upload endpoint if we wanted to support the 2-step flow,
-        but since we are using direct upload now, this is less critical.
-        Let's return a dummy URL or the direct endpoint.
-        """
-        return f"{settings.API_V1_PREFIX}/files/upload/direct" 
+        """Generate presigned URL for direct upload"""
+        if expires_in is None:
+            expires_in = settings.S3_PRESIGNED_URL_EXPIRY
+        
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'put_object',
+                Params={
+                    'Bucket': self.bucket,
+                    'Key': storage_key,
+                    'ContentType': content_type,
+                },
+                ExpiresIn=expires_in
+            )
+            return url
+        except ClientError as e:
+            raise Exception(f"Failed to generate upload URL: {str(e)}")
     
     def create_presigned_download_url(
         self,
@@ -154,56 +170,113 @@ class LocalStorageService:
         expires_in: int = None,
         filename: Optional[str] = None
     ) -> str:
-        """
-        For local storage, we serve files via an endpoint.
-        We'll return a URL to a new download endpoint we might need to create, 
-        or just return the file directly in the API.
-        The current API uses this to get a URL. 
-        Let's assume we will serve files via /files/{id}/content or similar.
-        For now, let's return a placeholder or modify the API to serve content directly.
-        Actually, the API calls this. 
-        """
-        # We need a way to serve these files. 
-        # For now, let's return a relative path that the frontend can use if we serve static files,
-        # or better, the API should handle the download.
-        # The current API implementation for get_download_url returns this URL.
-        # We should probably change the API to stream the file if it's local.
-        return f"/api/v1/files/download/proxy?key={storage_key}"
+        """Generate presigned URL for download/view"""
+        if expires_in is None:
+            expires_in = settings.S3_PRESIGNED_URL_EXPIRY
+        
+        params = {
+            'Bucket': self.bucket,
+            'Key': storage_key
+        }
+        
+        if filename:
+            # If filename is provided, we can force download, 
+            # BUT for "viewing" (inline), we might want to omit this or set it to inline.
+            # The API calls this with filename for "download".
+            # For "view", we might need a separate method or flag.
+            # However, the current API usage for "view_url" in files.py calls the proxy endpoint,
+            # which then calls this. 
+            # Wait, the proxy endpoint in files.py calls this? 
+            # No, files.py proxy endpoint calls `storage_service.create_presigned_download_url`.
+            # If we want inline viewing, we should allow `ResponseContentDisposition` to be 'inline'.
+            
+            # Let's check how files.py uses it.
+            # It calls: storage_service.create_presigned_download_url(file.storage_key, filename=file.original_filename)
+            # This forces attachment.
+            
+            # We should probably allow passing 'disposition' type.
+            pass
 
-    def delete_file(self, storage_key: str) -> bool:
-        """Delete file from local storage"""
+        # To support the 'inline' vs 'attachment' toggle from the controller:
+        # We'll rely on the controller to pass the right params or we'll modify this signature.
+        # For now, let's keep it compatible but maybe check if filename is passed.
+        
+        if filename:
+             params['ResponseContentDisposition'] = f'attachment; filename="{filename}"'
+        
         try:
-            path = Path(storage_key)
-            if path.exists():
-                path.unlink()
-                return True
-            return False
-        except Exception as e:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params=params,
+                ExpiresIn=expires_in
+            )
+            return url
+        except ClientError as e:
+            raise Exception(f"Failed to generate download URL: {str(e)}")
+            
+    def create_presigned_view_url(self, storage_key: str, content_type: str, expires_in: int = None) -> str:
+        """Generate presigned URL for inline viewing"""
+        if expires_in is None:
+            expires_in = settings.S3_PRESIGNED_URL_EXPIRY
+            
+        params = {
+            'Bucket': self.bucket,
+            'Key': storage_key,
+            'ResponseContentType': content_type,
+            'ResponseContentDisposition': 'inline'
+        }
+        
+        try:
+            url = self.s3_client.generate_presigned_url(
+                'get_object',
+                Params=params,
+                ExpiresIn=expires_in
+            )
+            return url
+        except ClientError as e:
+            raise Exception(f"Failed to generate view URL: {str(e)}")
+    
+    def delete_file(self, storage_key: str) -> bool:
+        """Delete file from B2"""
+        try:
+            self.s3_client.delete_object(Bucket=self.bucket, Key=storage_key)
+            return True
+        except ClientError as e:
             raise Exception(f"Failed to delete file: {str(e)}")
     
     def check_file_exists(self, storage_key: str) -> bool:
-        """Check if file exists"""
-        return Path(storage_key).exists()
+        """Check if file exists in B2"""
+        try:
+            self.s3_client.head_object(Bucket=self.bucket, Key=storage_key)
+            return True
+        except ClientError:
+            return False
 
     def download_file_obj(self, storage_key: str, file_obj):
         """Download file to file-like object"""
         try:
-            with open(storage_key, 'rb') as f:
-                shutil.copyfileobj(f, file_obj)
-        except Exception as e:
+            self.s3_client.download_fileobj(self.bucket, storage_key, file_obj)
+        except ClientError as e:
             raise Exception(f"Failed to download file: {str(e)}")
 
     def upload_file_obj(self, file_obj, storage_key: str, content_type: str = None):
-        """Upload file-like object to local storage"""
-        try:
-            # Ensure directory exists (it should be part of the key generation, but double check)
-            Path(storage_key).parent.mkdir(parents=True, exist_ok=True)
+        """Upload file-like object to B2"""
+        extra_args = {
+            'ServerSideEncryption': 'AES256'
+        }
+        if content_type:
+            extra_args['ContentType'] = content_type
             
-            with open(storage_key, 'wb') as f:
-                shutil.copyfileobj(file_obj, f)
-        except Exception as e:
+        try:
+            self.s3_client.upload_fileobj(
+                file_obj, 
+                self.bucket, 
+                storage_key,
+                ExtraArgs=extra_args
+            )
+        except ClientError as e:
             raise Exception(f"Failed to upload file: {str(e)}")
 
-# Switch to Local Storage
-storage_service = LocalStorageService()
-# storage_service = S3StorageService()
+# Switch to B2 Storage
+storage_service = B2StorageService()
+# storage_service = LocalStorageService()

@@ -75,6 +75,70 @@ async def register(user_data: UserRegister, db: AsyncSession = Depends(get_db)):
     
     await db.commit()
     await db.refresh(user)
+
+    # Create default "Welcome.txt" file
+    try:
+        # Find "Personal" folder
+        personal_folder = next((f for f in default_folders if f["name"] == "Personal"), None)
+        personal_folder_id = None
+        
+        # We need to query the folder ID since we just added them but didn't refresh all
+        # Or we can just look it up
+        from sqlalchemy import select
+        from app.models.folder import Folder
+        
+        result = await db.execute(
+            select(Folder).where(
+                Folder.owner_user_id == user.id,
+                Folder.name == "Personal"
+            )
+        )
+        personal_db_folder = result.scalar_one_or_none()
+        if personal_db_folder:
+            personal_folder_id = personal_db_folder.id
+
+        welcome_content = b"""Welcome to FileFlow!
+
+This is your personal secure cloud storage.
+- Upload files and organize them into folders
+- Share files securely with other users
+- Search your documents instantly
+
+Enjoy!
+- The FileFlow Team
+"""
+        filename = "Welcome.txt"
+        
+        # Generate storage key
+        from app.services.storage import storage_service
+        storage_key = storage_service.generate_storage_key(str(user.id), filename)
+        
+        # Upload content
+        import io
+        storage_service.upload_file_obj(io.BytesIO(welcome_content), storage_key, "text/plain")
+        
+        # Create file record
+        from app.models.file import File
+        from app.config import settings
+        
+        welcome_file = File(
+            owner_user_id=user.id,
+            folder_id=personal_folder_id,
+            filename=filename,
+            original_filename=filename,
+            size_bytes=len(welcome_content),
+            mime_type="text/plain",
+            storage_key=storage_key,
+            storage_bucket=settings.B2_BUCKET_NAME,
+            checksum_sha256="pending", # TODO: Calculate
+            status="uploaded"
+        )
+        db.add(welcome_file)
+        await db.commit()
+        
+    except Exception as e:
+        # Don't fail registration if welcome file fails
+        print(f"Failed to create welcome file: {e}")
     
     # Generate tokens
     access_token = create_access_token({"sub": str(user.id), "email": user.email})

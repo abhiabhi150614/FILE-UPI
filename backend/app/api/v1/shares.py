@@ -6,6 +6,7 @@ from datetime import datetime
 from app.db.session import get_db
 from app.models.user import User
 from app.models.file import File
+from app.models.folder import Folder
 from app.models.share import Share
 from app.api.v1.auth import get_current_user
 from app.core.security import generate_transaction_id
@@ -59,7 +60,8 @@ async def send_file(
         raise HTTPException(status_code=404, detail="File not found or deleted")
     
     # Check if file is ready
-    if file.status != "uploaded":
+    # Check if file is ready
+    if file.status not in ["uploaded", "hidden"]:
         raise HTTPException(status_code=400, detail="File is not ready to be shared")
     
     # Find recipient
@@ -93,9 +95,59 @@ async def send_file(
     db.add(share)
     
     # If recipient exists, mark as delivered
+    # If recipient exists, mark as delivered and create file copy
     if recipient:
         share.status = "delivered"
         share.delivered_at = datetime.utcnow()
+        
+        # 1. Find or Create Target Folder for Recipient
+        result = await db.execute(
+            select(Folder).where(
+                Folder.owner_user_id == recipient.id,
+                Folder.name == share_data.target_folder_name
+            )
+        )
+        target_folder = result.scalar_one_or_none()
+        
+        if not target_folder:
+            # Create folder if it doesn't exist
+            # Need to calculate position
+            from sqlalchemy import func
+            result = await db.execute(
+                select(func.max(Folder.position)).where(Folder.owner_user_id == recipient.id)
+            )
+            max_position = result.scalar()
+            new_position = (max_position + 1) if max_position is not None else 0
+            
+            target_folder = Folder(
+                owner_user_id=recipient.id,
+                name=share_data.target_folder_name,
+                icon="📁", # Default icon
+                color="#667eea", # Default color
+                position=new_position
+            )
+            db.add(target_folder)
+            await db.flush() # Flush to get ID
+            
+        # 2. Create File Record for Recipient
+        # We point to the SAME storage key (deduplication)
+        recipient_file = File(
+            owner_user_id=recipient.id,
+            folder_id=target_folder.id,
+            filename=file.filename,
+            original_filename=file.original_filename,
+            size_bytes=file.size_bytes,
+            mime_type=file.mime_type,
+            storage_key=file.storage_key,
+            storage_bucket=file.storage_bucket,
+            checksum_sha256=file.checksum_sha256,
+            status="uploaded" # Visible to recipient
+        )
+        
+        db.add(recipient_file)
+        
+        # Update recipient storage usage
+        recipient.storage_used_bytes += file.size_bytes
         
         # TODO: Send notification to recipient
     

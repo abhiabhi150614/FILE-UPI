@@ -1,64 +1,60 @@
 # Core Framework
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-python-multipart==0.0.6
+fastapi
+uvicorn[standard]
+python-multipart==0.0.9
 
 # Database
-sqlalchemy==2.0.23
-asyncpg==0.29.0
-alembic==1.12.1
-psycopg2-binary==2.9.9
+sqlalchemy
+asyncpg
+alembic
+psycopg2-binary
 
 # Redis & Caching
-redis==5.0.1
-hiredis==2.2.3
+redis==4.6.0
+hiredis
 
 # Authentication & Security
-python-jose[cryptography]==3.3.0
-bcrypt==4.1.2
-python-multipart==0.0.6
-pydantic[email]==2.5.0
+python-jose[cryptography]
+bcrypt
+pydantic[email]
 
 # AWS S3
-boto3==1.29.7
-botocore==1.32.7
+boto3
+botocore
 
 # Background Tasks
-celery==5.3.4
-flower==2.0.1
+celery
+flower
 
 # Search
-elasticsearch==8.11.0
+elasticsearch
 
 # OCR & File Processing
-pytesseract==0.3.10
-Pillow==10.1.0
-pdf2image==1.16.3
-PyPDF2==3.0.1
+pytesseract
+Pillow
+pdf2image
+PyPDF2
 
 # Notifications
-twilio==8.10.0
-sendgrid==6.11.0
+twilio
+sendgrid
 
 # Monitoring & Logging
-sentry-sdk==1.38.0
-python-json-logger==2.0.7
+sentry-sdk
+python-json-logger
 
 # Rate Limiting
-slowapi==0.1.9
-
-# CORS
-python-cors==1.0.0
+slowapi
 
 # Environment Variables
-python-dotenv==1.0.0
+python-dotenv
 
 # Testing
-pytest==7.4.3
-pytest-asyncio==0.21.1
-httpx==0.25.2
+pytest
+pytest-asyncio
+httpx
 
 # Code Quality
-black==23.11.0
-flake8==6.1.0
-mypy==1.7.1
+black
+flake8
+mypy

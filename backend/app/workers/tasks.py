@@ -5,7 +5,7 @@ from pdf2image import convert_from_bytes
 from celery import shared_task
 from app.core.celery_app import celery_app
 from app.services.storage import storage_service
-from app.db.session import SessionLocal
+# from app.db.session import SessionLocal
 from app.models.file import File
 from sqlalchemy import update
 import logging
@@ -48,7 +48,8 @@ def process_file_ocr(file_id: str, storage_key: str, mime_type: str):
             # and TODO: Add content_text column to File model.
             logger.info(f"OCR Complete for {file_id}. Extracted {len(extracted_text)} chars.")
             
-            # db = SessionLocal()
+            from app.db.session import SessionLocal
+            db = SessionLocal()
             # try:
             #     stmt = update(File).where(File.id == file_id).values(content_text=extracted_text)
             #     db.execute(stmt)
@@ -101,6 +102,7 @@ def generate_thumbnail(file_id: str, storage_key: str, mime_type: str):
             storage_service.upload_file_obj(thumb_io, thumb_key, "image/jpeg")
             
             # Update DB
+            from app.db.session import SessionLocal
             db = SessionLocal()
             try:
                 # We need to construct the full URL or just the key. 

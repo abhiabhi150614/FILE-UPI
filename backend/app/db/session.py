@@ -17,6 +17,26 @@ AsyncSessionLocal = sessionmaker(
     autoflush=False,
 )
 
+# Synchronous session for Celery tasks
+from sqlalchemy import create_engine
+from sqlalchemy.orm import Session
+
+# Create sync URL from async URL
+SYNC_DATABASE_URL = settings.DATABASE_URL.replace("+asyncpg", "")
+
+sync_engine = create_engine(
+    SYNC_DATABASE_URL,
+    pool_size=settings.DATABASE_POOL_SIZE,
+    max_overflow=settings.DATABASE_MAX_OVERFLOW,
+    echo=settings.DEBUG,
+)
+
+SessionLocal = sessionmaker(
+    autocommit=False,
+    autoflush=False,
+    bind=sync_engine
+)
+
 async def get_db():
     async with AsyncSessionLocal() as session:
         try:

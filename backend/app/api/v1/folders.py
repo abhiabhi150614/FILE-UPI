@@ -73,13 +73,22 @@ async def create_folder(
     db: AsyncSession = Depends(get_db)
 ):
     """Create new folder"""
+    # Calculate position
+    from sqlalchemy import func
+    result = await db.execute(
+        select(func.max(Folder.position)).where(Folder.owner_user_id == current_user.id)
+    )
+    max_position = result.scalar()
+    new_position = (max_position + 1) if max_position is not None else 0
+
     folder = Folder(
         owner_user_id=current_user.id,
         name=folder_data.name,
         description=folder_data.description,
         icon=folder_data.icon,
         color=folder_data.color,
-        parent_folder_id=folder_data.parent_folder_id
+        parent_folder_id=folder_data.parent_folder_id,
+        position=new_position
     )
     
     db.add(folder)

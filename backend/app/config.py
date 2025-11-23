@@ -29,13 +29,12 @@ class Settings(BaseSettings):
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 30
     REFRESH_TOKEN_EXPIRE_DAYS: int = 7
     
-    # AWS S3
-    AWS_ACCESS_KEY_ID: str
-    AWS_SECRET_ACCESS_KEY: str
-    AWS_REGION: str = "us-east-1"
-    S3_BUCKET: str
-    S3_PRESIGNED_URL_EXPIRY: int = 3600
-    
+    # Backblaze B2
+    B2_KEY_ID: str | None = None
+    B2_APP_KEY: str | None = None
+    B2_BUCKET_NAME: str | None = None
+    B2_ENDPOINT_URL: str | None = None
+    S3_PRESIGNED_URL_EXPIRY: int = 3600  # 1 hour 
     # Elasticsearch
     ELASTICSEARCH_URL: str
     ELASTICSEARCH_INDEX: str = "fileflow_files"

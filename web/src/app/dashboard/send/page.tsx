@@ -61,6 +61,8 @@ export default function SendPage() {
       if (mode === 'new' && uploadFile) {
         const formData = new FormData();
         formData.append('file', uploadFile);
+        formData.append('is_hidden', 'true'); // Hide from sender's list
+        
         if (targetFolder) {
            // Note: The backend expects 'folder_id', but here we have 'target_folder_name' for the transaction.
            // The file itself might just go to root or a default folder for the sender.
