@@ -53,7 +53,14 @@ export const fileAPI = {
   uploadDirect: (formData: FormData) => api.post('/files/upload/direct', formData, {
     headers: { 'Content-Type': 'multipart/form-data' }
   }),
-  getAll: (folderId?: string) => api.get('/files', { params: { folder_id: folderId } }),
+  getAll: (folderId?: string, search?: string) => {
+    let url = '/files/';
+    const params = new URLSearchParams();
+    if (folderId) params.append('folder_id', folderId);
+    if (search) params.append('search', search);
+    if (params.toString()) url += `?${params.toString()}`;
+    return api.get(url);
+  },
   getDownloadUrl: (id: string) => api.get(`/files/${id}/download`),
   delete: (id: string) => api.delete(`/files/${id}`),
 };

@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { ArrowLeft, FileText, Download, Trash2, MoreVertical, Search, FolderOpen, Eye } from 'lucide-react';
 import { folderAPI, fileAPI } from '@/lib/api';
 import toast from 'react-hot-toast';
+import FilePreviewModal from '@/components/FilePreviewModal';
 
 export default function FolderPage() {
   const router = useRouter();
@@ -16,6 +17,7 @@ export default function FolderPage() {
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
+  const [previewFile, setPreviewFile] = useState<any>(null);
 
   useEffect(() => {
     setMounted(true);
@@ -24,15 +26,6 @@ export default function FolderPage() {
 
   const loadFolderData = async () => {
     try {
-      // In a real app, we'd have a specific endpoint for folder details + files
-      // For now, we'll fetch all files and filter (or use the existing API if it supports folder filtering)
-      // Assuming fileAPI.getAll() can take a folder_id or we filter client side if API is limited
-      // Let's assume we need to fetch all files and filter for now, or update API later.
-      // Actually, looking at the previous code, there wasn't a clear "get files by folder" API usage shown.
-      // I will assume fileAPI.getAll() returns all files and I filter them, OR I should check if there's a specific endpoint.
-      // To be safe and robust, I'll fetch all and filter client-side for this MVP, 
-      // but ideally the backend should support ?folder_id=...
-      
       const [filesRes, foldersRes] = await Promise.all([
         fileAPI.getAll(),
         folderAPI.getAll()
@@ -45,8 +38,6 @@ export default function FolderPage() {
         setFolderName('Unknown Folder');
       }
 
-      // Filter files that belong to this folder
-      // Note: The file model needs a folder_id. I saw it in the upload logic.
       const folderFiles = filesRes.data.filter((f: any) => f.folder_id === folderId);
       setFiles(folderFiles);
 
@@ -61,8 +52,6 @@ export default function FolderPage() {
   const handleDownload = async (fileId: string, filename: string) => {
     try {
       const { data } = await fileAPI.getDownloadUrl(fileId);
-      
-      // Create a temporary link to trigger download
       const link = document.createElement('a');
       link.href = data.download_url;
       link.download = filename;
@@ -156,17 +145,13 @@ export default function FolderPage() {
                 </div>
 
                 <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                  {file.view_url && (
-                    <a 
-                      href={file.view_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-blue-400 transition"
-                      title="View"
-                    >
-                      <Eye className="w-4 h-4" />
-                    </a>
-                  )}
+                  <button 
+                    onClick={() => setPreviewFile(file)}
+                    className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-blue-400 transition"
+                    title="View"
+                  >
+                    <Eye className="w-4 h-4" />
+                  </button>
                   <button 
                     onClick={() => handleDownload(file.id, file.filename)}
                     className="p-2 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white transition"
@@ -199,6 +184,13 @@ export default function FolderPage() {
           </div>
         )}
       </div>
+
+      {/* Preview Modal */}
+      <FilePreviewModal 
+        isOpen={!!previewFile} 
+        onClose={() => setPreviewFile(null)} 
+        file={previewFile} 
+      />
     </div>
   );
 }

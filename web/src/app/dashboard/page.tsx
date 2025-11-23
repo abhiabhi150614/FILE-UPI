@@ -7,6 +7,8 @@ import { folderAPI, fileAPI, userAPI } from '@/lib/api';
 import { FolderOpen, Upload, Send, Search, LogOut, HardDrive, Bell, Settings, QrCode, Clock } from 'lucide-react';
 import toast from 'react-hot-toast';
 
+import QRCodeModal from '@/components/QRCodeModal';
+
 export default function Dashboard() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
@@ -14,6 +16,7 @@ export default function Dashboard() {
   const [storage, setStorage] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [mounted, setMounted] = useState(false);
+  const [showQR, setShowQR] = useState(false);
 
   useEffect(() => {
     setMounted(true);
@@ -127,14 +130,14 @@ export default function Dashboard() {
         <h2 className="text-xl font-bold text-white mb-6">Quick Actions</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-12">
           {[
-            { icon: Send, label: 'Send File', desc: 'Transfer to anyone', color: 'from-blue-500 to-indigo-600', href: '/dashboard/send' },
-            { icon: Upload, label: 'Upload', desc: 'Save to cloud', color: 'from-emerald-500 to-teal-600', href: '/dashboard/upload' },
-            { icon: QrCode, label: 'Scan QR', desc: 'Receive instantly', color: 'from-purple-500 to-pink-600', href: '/dashboard/scan' },
-            { icon: Search, label: 'Search', desc: 'Find anything', color: 'from-orange-500 to-red-600', href: '/dashboard/search' },
+            { icon: Send, label: 'Send File', desc: 'Transfer to anyone', color: 'from-blue-500 to-indigo-600', onClick: () => router.push('/dashboard/send') },
+            { icon: Upload, label: 'Upload', desc: 'Save to cloud', color: 'from-emerald-500 to-teal-600', onClick: () => router.push('/dashboard/upload') },
+            { icon: QrCode, label: 'Receive', desc: 'Show QR Code', color: 'from-purple-500 to-pink-600', onClick: () => setShowQR(true) },
+            { icon: Search, label: 'Search', desc: 'Find anything', color: 'from-orange-500 to-red-600', onClick: () => router.push('/dashboard/search') },
           ].map((action, i) => (
             <button
               key={i}
-              onClick={() => router.push(action.href)}
+              onClick={action.onClick}
               className="group relative overflow-hidden rounded-2xl p-6 text-left transition-all hover:scale-[1.02] hover:shadow-lg border border-white/5"
               style={{ backgroundColor: 'rgba(30, 41, 59, 0.4)' }}
             >
@@ -204,6 +207,13 @@ export default function Dashboard() {
            </div>
         </div>
       </div>
+
+      {/* QR Code Modal */}
+      <QRCodeModal 
+        isOpen={showQR} 
+        onClose={() => setShowQR(false)} 
+        value={user?.email || ''} 
+      />
     </div>
   );
 }

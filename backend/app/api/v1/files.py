@@ -214,12 +214,13 @@ async def complete_upload(
 @router.get("/", response_model=List[FileResponse])
 async def get_files(
     folder_id: str | None = None,
+    search: str | None = None,
     limit: int = 50,
     offset: int = 0,
     current_user: User = Depends(get_current_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Get files for current user with pagination"""
+    """Get files for current user with pagination and search"""
     # Validate pagination
     if limit > 100:
         limit = 100
@@ -234,6 +235,9 @@ async def get_files(
     
     if folder_id:
         query = query.where(File.folder_id == folder_id)
+        
+    if search:
+        query = query.where(File.filename.ilike(f"%{search}%"))
     
     result = await db.execute(query.order_by(File.created_at.desc()).limit(limit).offset(offset))
     files = result.scalars().all()
